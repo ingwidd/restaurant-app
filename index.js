@@ -1,13 +1,13 @@
-let express = require("express");
-let path = require("path");
-const cors = require("cors");
-let app = express();
+let express = require('express');
+let path = require('path');
+let cors = require('cors');
+const { Pool } = require('pg');
+require('dotenv').config();
+const { DATABASE_URL } = process.env
+
+let app = express()
 app.use(cors());
 app.use(express.json());
-
-const { Pool } = require("pg");
-require("dotenv").config();
-const { DATABASE_URL } = process.env;
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -28,19 +28,48 @@ async function getPostgresVersion() {
 
 getPostgresVersion();
 
-app.post("/posts", async (req, res) => {
+app.get('/menu', async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const query = 'SELECT * FROM menu_items';
+    const result = await client.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.log(error.stack);
+    res.status(500).send("An error occured.");
+  } finally {
+    client.release();
+  }
+})
+
+app.get('/menu/:id', async (req, res) => {
+  const id = req.params.id;
+  const client = await pool.connect();
+
+  try {
+    const query = `SELECT * FROM menu_items WHERE id=${id}`;
+    const result = await client.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.log("Error: ", error.message);
+    res.status(404).json({ error: "Item not found." });
+  } finally {
+    client.release();
+  }
+})
+
+app.post("/menu", async (req, res) => {
   const client = await pool.connect();
   try {
     const data = {
-      title: req.body.title,
-      content: req.body.content,
-      author: req.body.author,
-      created_at: new Date().toISOString(),
+      name: req.body.name,
+      price: req.body.price,
+      category: req.body.category
     };
 
-    const query =
-      "INSERT INTO posts (title, content, author, created_at) VALUES ($1, $2, $3, $4) RETURNING id";
-    const params = [data.title, data.content, data.author, data.created_at];
+    const query = "INSERT INTO menu_items (name, price, category) VALUES ($1, $2, $3) RETURNING id";
+    const params = [data.name, data.price, data.category];
 
     const result = await client.query(query, params);
     data.id = result.rows[0].id; // assign the last inserted id to data object
